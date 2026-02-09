@@ -1,4 +1,5 @@
 use std::f32::consts::FRAC_PI_4;
+use std::time::Instant;
 
 use crate::color::Color;
 use crate::image::Image;
@@ -145,6 +146,7 @@ impl Camera {
                         y_offset,
                         y_offset + sub_image.get_height()
                     );
+                    let timer = Instant::now();
                     for y in 0..sub_image.get_height() {
                         for x in 0..sub_image.get_width() {
                             let mut color = Color::BLACK;
@@ -156,7 +158,12 @@ impl Camera {
                             sub_image.put_pixel(x, y, color);
                         }
                     }
-                    println!("thread {:?} finished", thread_id);
+                    let render_time = timer.elapsed();
+                    println!(
+                        "thread {:?} finished in {}s",
+                        thread_id,
+                        render_time.as_secs_f64()
+                    );
                 });
             }
         });
