@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::rc::Rc;
 
-use crate::material::StandardMaterial;
+use crate::material::Material;
 use crate::math::Vec3;
 
 #[derive(Clone, Copy, Debug)]
@@ -10,7 +10,7 @@ pub struct HitRecord {
     pub normal: Vec3,
     pub t: f32,
     pub is_front_face: bool,
-    pub material: StandardMaterial,
+    pub material: Material,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -89,7 +89,7 @@ pub trait Hittable {
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
-    pub material: StandardMaterial,
+    pub material: Material,
 }
 
 impl Hittable for Sphere {

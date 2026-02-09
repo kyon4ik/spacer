@@ -43,6 +43,11 @@ impl Color {
             self.b().clamp(0.0, 1.0).sqrt(),
         )
     }
+
+    #[inline]
+    pub fn lerp(self, rhs: Self, t: f32) -> Self {
+        Color(self.0.lerp(rhs.0, t))
+    }
 }
 
 impl Add for Color {

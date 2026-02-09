@@ -2,75 +2,70 @@ use crate::color::Color;
 use crate::math::Vec3;
 use crate::primitives::{HitRecord, Ray};
 
-pub trait Material {
-    fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<(Color, Ray)>;
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub enum MaterialKind {
-    #[default]
-    Lambertian,
-    Metalic,
-    Dielectric,
+#[derive(Clone, Copy, Debug)]
+pub enum Material {
+    Lambertian(LambertianMaterial),
+    Metalic(MetalicMaterial),
+    Dielectric(DielectricMaterial),
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct StandardMaterial {
-    pub kind: MaterialKind,
+pub struct LambertianMaterial {
+    pub albedo: Color,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MetalicMaterial {
     pub albedo: Color,
     /// Fuzziness of the metalic material
     pub fuzz: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DielectricMaterial {
     /// Index of refraction relative to the environment
     pub ior: f32,
 }
 
-impl StandardMaterial {
-    pub fn from_color(color: Color) -> Self {
-        Self {
-            albedo: color,
-            ..Default::default()
-        }
+impl Material {
+    pub const fn lambertian(albedo: Color) -> Self {
+        Self::Lambertian(LambertianMaterial { albedo })
     }
-}
 
-impl Default for StandardMaterial {
-    fn default() -> Self {
-        Self {
-            kind: MaterialKind::default(),
-            albedo: Color::WHITE,
-            fuzz: 0.0,
-            ior: 1.5,
-        }
+    pub const fn metalic(albedo: Color, fuzz: f32) -> Self {
+        Self::Metalic(MetalicMaterial { albedo, fuzz })
     }
-}
 
-impl Material for StandardMaterial {
-    fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<(Color, Ray)> {
-        match self.kind {
-            MaterialKind::Lambertian => {
+    pub const fn dielectric(ior: f32) -> Self {
+        Self::Dielectric(DielectricMaterial { ior })
+    }
+
+    pub fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<(Color, Ray)> {
+        match self {
+            Self::Lambertian(mat) => {
                 let mut scatter_dir = hit.normal + Vec3::random_on_sphere();
                 if scatter_dir.relative_eq(&Vec3::ZERO) {
                     scatter_dir = hit.normal;
                 }
                 let scattered_ray = Ray::new(hit.point, scatter_dir);
-                Some((self.albedo, scattered_ray))
+                Some((mat.albedo, scattered_ray))
             }
-            MaterialKind::Metalic => {
+            Self::Metalic(mat) => {
                 let reflect_dir = ray.direction().reflect(&hit.normal);
-                let fuzzed_dir = reflect_dir.normalized() + (Vec3::random_on_sphere() * self.fuzz);
+                let fuzzed_dir = reflect_dir.normalized() + (Vec3::random_on_sphere() * mat.fuzz);
                 let scattered_ray = Ray::new(hit.point, fuzzed_dir);
 
                 if scattered_ray.direction().dot(&hit.normal) > 0.0 {
-                    Some((self.albedo, scattered_ray))
+                    Some((mat.albedo, scattered_ray))
                 } else {
                     None
                 }
             }
-            MaterialKind::Dielectric => {
+            Self::Dielectric(mat) => {
                 let ior = if hit.is_front_face {
-                    self.ior.recip()
+                    mat.ior.recip()
                 } else {
-                    self.ior
+                    mat.ior
                 };
 
                 let ray_dir = ray.direction().normalized();
@@ -86,6 +81,29 @@ impl Material for StandardMaterial {
                 Some((Color::WHITE, scattered_ray))
             }
         }
+    }
+}
+
+impl Default for LambertianMaterial {
+    fn default() -> Self {
+        Self {
+            albedo: Color::WHITE,
+        }
+    }
+}
+
+impl Default for MetalicMaterial {
+    fn default() -> Self {
+        Self {
+            albedo: Color::WHITE,
+            fuzz: 0.0,
+        }
+    }
+}
+
+impl Default for DielectricMaterial {
+    fn default() -> Self {
+        Self { ior: 1.5 }
     }
 }
 

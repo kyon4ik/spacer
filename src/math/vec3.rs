@@ -116,6 +116,12 @@ impl Vec3 {
     pub fn is_normalized(&self) -> bool {
         f32::abs(self.length() - 1.0) <= 2e-4
     }
+
+    #[inline]
+    pub fn lerp(self, rhs: Self, t: f32) -> Self {
+        debug_assert!((0.0..=1.0).contains(&t));
+        self * (1.0 - t) + rhs * t
+    }
 }
 
 pub const fn vec3(x: f32, y: f32, z: f32) -> Vec3 {

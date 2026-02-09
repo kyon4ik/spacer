@@ -4,9 +4,9 @@ use std::time::Instant;
 use spacer::camera::{Camera, CameraParams};
 use spacer::color::Color;
 use spacer::image::Image;
-use spacer::material::{Material, MaterialKind, StandardMaterial};
+use spacer::material::Material;
 use spacer::math::{Transform, Vec3, vec3};
-use spacer::primitives::{Hittable, HittableList, Ray, Sphere, SphereList};
+use spacer::primitives::{Hittable, Ray, Sphere, SphereList};
 
 const SKY_COLOR: Color = Color::new(0.5, 0.7, 1.0);
 
@@ -14,13 +14,13 @@ fn main() {
     fastrand::seed(8767162531530871546);
     println!("Random seed: {}", fastrand::get_seed());
 
-    let mut image = Image::from_aspect_ratio(1200, 16.0 / 9.0);
+    let mut image = Image::from_aspect_ratio(600, 16.0 / 9.0);
 
     let camera_params = CameraParams {
         image_width: image.get_width(),
         image_height: image.get_height(),
         fov: f32::to_radians(20.0),
-        samples_per_pixel: 1,
+        samples_per_pixel: 16,
         defocus_angle: f32::to_radians(0.6),
         focus_dist: 10.0,
     };
@@ -61,13 +61,12 @@ fn ray_color(ray: Ray, world: &impl Hittable, bounces: u8) -> Color {
 
     let ray_norm_dir = ray.direction().normalized();
     let a = 0.5 * (ray_norm_dir.y + 1.0);
-    debug_assert!((0.0..=1.0).contains(&a));
-    Color::WHITE * (1.0 - a) + SKY_COLOR * a
+    Color::WHITE.lerp(SKY_COLOR, a)
 }
 
 fn final_world() -> SphereList {
     let mut world = SphereList::default();
-    let ground_material = StandardMaterial::from_color(Color::new(0.5, 0.5, 0.5));
+    let ground_material = Material::lambertian(Color::new(0.5, 0.5, 0.5));
     world.add(Rc::new(Sphere {
         center: vec3(0.0, -1000.0, 0.0),
         radius: 1000.0,
@@ -86,22 +85,13 @@ fn final_world() -> SphereList {
             if (center - vec3(4.0, 0.2, 0.0)).length() > 0.9 {
                 let sphere_material = if choose_mat < 0.8 {
                     let albedo = Color::random() * Color::random();
-                    StandardMaterial::from_color(albedo)
+                    Material::lambertian(albedo)
                 } else if choose_mat < 0.95 {
                     let albedo = Color::random() * 0.5 + Color::new(0.5, 0.5, 0.5);
                     let fuzz = fastrand::f32() * 0.5;
-                    StandardMaterial {
-                        kind: MaterialKind::Metalic,
-                        albedo,
-                        fuzz,
-                        ..Default::default()
-                    }
+                    Material::metalic(albedo, fuzz)
                 } else {
-                    StandardMaterial {
-                        kind: MaterialKind::Dielectric,
-                        ior: 1.5,
-                        ..Default::default()
-                    }
+                    Material::dielectric(1.5)
                 };
 
                 world.add(Rc::new(Sphere {
@@ -113,89 +103,25 @@ fn final_world() -> SphereList {
         }
     }
 
-    let material1 = StandardMaterial {
-        kind: MaterialKind::Dielectric,
-        ior: 1.5,
-        ..Default::default()
-    };
+    let material1 = Material::dielectric(1.5);
     world.add(Rc::new(Sphere {
         center: vec3(0.0, 1.0, 0.0),
         radius: 1.0,
         material: material1,
     }));
 
-    let material2 = StandardMaterial::from_color(Color::new(0.4, 0.2, 0.1));
+    let material2 = Material::lambertian(Color::new(0.4, 0.2, 0.1));
     world.add(Rc::new(Sphere {
         center: vec3(-4.0, 1.0, 0.0),
         radius: 1.0,
         material: material2,
     }));
 
-    let material3 = StandardMaterial {
-        kind: MaterialKind::Metalic,
-        albedo: Color::new(0.7, 0.6, 0.5),
-        ..Default::default()
-    };
+    let material3 = Material::metalic(Color::new(0.7, 0.6, 0.5), 0.0);
     world.add(Rc::new(Sphere {
         center: vec3(4.0, 1.0, 0.0),
         radius: 1.0,
         material: material3,
-    }));
-
-    world
-}
-
-fn test_world() -> HittableList {
-    let material_ground = StandardMaterial {
-        albedo: Color::new(0.8, 0.8, 0.0),
-        ..Default::default()
-    };
-    let material_center = StandardMaterial {
-        albedo: Color::new(0.1, 0.2, 0.5),
-        ..Default::default()
-    };
-    let material_left = StandardMaterial {
-        kind: MaterialKind::Dielectric,
-        ior: 1.5,
-        ..Default::default()
-    };
-    let material_bubble = StandardMaterial {
-        kind: MaterialKind::Dielectric,
-        ior: 1.0 / 1.5,
-        ..Default::default()
-    };
-    let material_right = StandardMaterial {
-        kind: MaterialKind::Metalic,
-        albedo: Color::new(0.8, 0.6, 0.2),
-        fuzz: 1.0,
-        ..Default::default()
-    };
-
-    let mut world = HittableList::default();
-    world.add(Rc::new(Sphere {
-        center: vec3(0.0, -100.5, -1.0),
-        radius: 100.0,
-        material: material_ground,
-    }));
-    world.add(Rc::new(Sphere {
-        center: vec3(0.0, 0.0, -1.2),
-        radius: 0.5,
-        material: material_center,
-    }));
-    world.add(Rc::new(Sphere {
-        center: vec3(-1.0, 0.0, -1.0),
-        radius: 0.5,
-        material: material_left,
-    }));
-    world.add(Rc::new(Sphere {
-        center: vec3(-1.0, 0.0, -1.0),
-        radius: 0.4,
-        material: material_bubble,
-    }));
-    world.add(Rc::new(Sphere {
-        center: vec3(1.0, 0.0, -1.0),
-        radius: 0.5,
-        material: material_right,
     }));
 
     world
