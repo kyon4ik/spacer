@@ -1,12 +1,12 @@
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Instant;
 
 use spacer::camera::{Camera, CameraParams};
 use spacer::color::Color;
 use spacer::image::Image;
 use spacer::material::Material;
-use spacer::math::{Transform, Vec3, vec3};
-use spacer::primitives::{Hittable, Ray, Sphere, SphereList};
+use spacer::math::{Interval, Transform, Vec3, vec3};
+use spacer::primitives::{BvhNode, Hittable, HittableList, Ray, Sphere};
 
 const SKY_COLOR: Color = Color::new(0.5, 0.7, 1.0);
 
@@ -14,13 +14,13 @@ fn main() {
     fastrand::seed(8767162531530871546);
     println!("Random seed: {}", fastrand::get_seed());
 
-    let mut image = Image::from_aspect_ratio(600, 16.0 / 9.0);
+    let mut image = Image::from_aspect_ratio(1920, 16.0 / 9.0);
 
     let camera_params = CameraParams {
         image_width: image.get_width(),
         image_height: image.get_height(),
         fov: f32::to_radians(20.0),
-        samples_per_pixel: 16,
+        samples_per_pixel: 512,
         defocus_angle: f32::to_radians(0.6),
         focus_dist: 10.0,
     };
@@ -51,7 +51,7 @@ fn ray_color(ray: Ray, world: &impl Hittable, bounces: u8) -> Color {
         return Color::BLACK;
     }
 
-    if let Some(hit) = ray.hit(world, 0.001..f32::INFINITY) {
+    if let Some(hit) = ray.hit(world, Interval::new(0.001, f32::INFINITY)) {
         if let Some((attenuation, scattered_ray)) = hit.material.scatter(&ray, &hit) {
             return ray_color(scattered_ray, world, bounces - 1) * attenuation;
         }
@@ -64,10 +64,10 @@ fn ray_color(ray: Ray, world: &impl Hittable, bounces: u8) -> Color {
     Color::WHITE.lerp(SKY_COLOR, a)
 }
 
-fn final_world() -> SphereList {
-    let mut world = SphereList::default();
+fn final_world() -> impl Hittable {
+    let mut world = HittableList::default();
     let ground_material = Material::lambertian(Color::new(0.5, 0.5, 0.5));
-    world.add(Rc::new(Sphere {
+    world.add(Arc::new(Sphere {
         center: vec3(0.0, -1000.0, 0.0),
         radius: 1000.0,
         material: ground_material,
@@ -94,7 +94,7 @@ fn final_world() -> SphereList {
                     Material::dielectric(1.5)
                 };
 
-                world.add(Rc::new(Sphere {
+                world.add(Arc::new(Sphere {
                     center,
                     radius: 0.2,
                     material: sphere_material,
@@ -104,25 +104,25 @@ fn final_world() -> SphereList {
     }
 
     let material1 = Material::dielectric(1.5);
-    world.add(Rc::new(Sphere {
+    world.add(Arc::new(Sphere {
         center: vec3(0.0, 1.0, 0.0),
         radius: 1.0,
         material: material1,
     }));
 
     let material2 = Material::lambertian(Color::new(0.4, 0.2, 0.1));
-    world.add(Rc::new(Sphere {
+    world.add(Arc::new(Sphere {
         center: vec3(-4.0, 1.0, 0.0),
         radius: 1.0,
         material: material2,
     }));
 
     let material3 = Material::metalic(Color::new(0.7, 0.6, 0.5), 0.0);
-    world.add(Rc::new(Sphere {
+    world.add(Arc::new(Sphere {
         center: vec3(4.0, 1.0, 0.0),
         radius: 1.0,
         material: material3,
     }));
 
-    world
+    BvhNode::new(&mut world)
 }

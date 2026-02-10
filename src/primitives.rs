@@ -1,8 +1,80 @@
-use std::ops::Range;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::material::Material;
-use crate::math::Vec3;
+use crate::math::{Aabb, Axis, Interval, Vec3};
+
+pub trait Hittable {
+    fn hit(&self, ray: &Ray, t_range: Interval) -> Option<HitRecord>;
+
+    fn bounding_box(&self) -> Aabb;
+}
+
+pub struct BvhNode {
+    left: Arc<dyn Hittable + Sync + Send>,
+    right: Arc<dyn Hittable + Send + Sync>,
+    bbox: Aabb,
+}
+
+impl BvhNode {
+    pub fn new(list: &mut HittableList) -> Self {
+        Self::from_hittables(list.objects.as_mut_slice())
+    }
+
+    fn from_hittables(objects: &mut [Arc<dyn Hittable + Send + Sync>]) -> Self {
+        let mut bbox = Aabb::EMPTY;
+        for object in objects.iter() {
+            bbox = bbox.enclose(object.bounding_box());
+        }
+
+        let compare = match bbox.longest_axis() {
+            Axis::X => |v: &Aabb, u: &Aabb| v.x_axis.cmp_min(&u.x_axis),
+            Axis::Y => |v: &Aabb, u: &Aabb| v.y_axis.cmp_min(&u.y_axis),
+            Axis::Z => |v: &Aabb, u: &Aabb| v.z_axis.cmp_min(&u.z_axis),
+        };
+
+        let children: (
+            Arc<dyn Hittable + Send + Sync>,
+            Arc<dyn Hittable + Send + Sync>,
+        ) = if objects.len() == 1 {
+            (objects[0].clone(), objects[0].clone())
+        } else if objects.len() == 2 {
+            (objects[0].clone(), objects[1].clone())
+        } else {
+            objects.sort_unstable_by(|a, b| compare(&a.bounding_box(), &b.bounding_box()));
+
+            let midpoint = objects.len() / 2;
+            let (left, right) = objects.split_at_mut(midpoint);
+            (
+                Arc::new(Self::from_hittables(left)),
+                Arc::new(Self::from_hittables(right)),
+            )
+        };
+
+        let (left, right) = children;
+        Self { left, right, bbox }
+    }
+}
+
+impl Hittable for BvhNode {
+    fn hit(&self, ray: &Ray, t_range: Interval) -> Option<HitRecord> {
+        if !self.bbox.hit(ray, t_range) {
+            return None;
+        }
+
+        let hit_left = self.left.hit(ray, t_range);
+
+        let right_t_max = hit_left.map_or(t_range.max, |hit| hit.t);
+        if let Some(hit_right) = self.right.hit(ray, Interval::new(t_range.min, right_t_max)) {
+            Some(hit_right)
+        } else {
+            hit_left
+        }
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        self.bbox
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct HitRecord {
@@ -36,53 +108,35 @@ impl Ray {
         self.origin + self.dir * t
     }
 
-    pub fn hit(&self, object: &impl Hittable, t_range: Range<f32>) -> Option<HitRecord> {
+    pub fn hit(&self, object: &impl Hittable, t_range: Interval) -> Option<HitRecord> {
         object.hit(self, t_range)
     }
 }
 
 #[derive(Default)]
 pub struct HittableList {
-    objects: Vec<Rc<dyn Hittable>>,
-}
-
-#[derive(Default)]
-pub struct SphereList {
-    spheres: Vec<Sphere>,
-}
-
-impl SphereList {
-    pub fn add(&mut self, object: Rc<Sphere>) {
-        self.spheres.push(*object);
-    }
+    objects: Vec<Arc<dyn Hittable + Send + Sync>>,
+    bbox: Aabb,
 }
 
 impl HittableList {
-    pub fn add(&mut self, object: Rc<dyn Hittable>) {
+    pub fn add(&mut self, object: Arc<dyn Hittable + Send + Sync>) {
+        self.bbox = self.bbox.enclose(object.bounding_box());
         self.objects.push(object);
     }
 }
 
 impl Hittable for HittableList {
-    fn hit(&self, ray: &Ray, t_range: Range<f32>) -> Option<HitRecord> {
+    fn hit(&self, ray: &Ray, t_range: Interval) -> Option<HitRecord> {
         self.objects
             .iter()
-            .filter_map(|object| object.hit(ray, t_range.clone()))
+            .filter_map(|object| object.hit(ray, t_range))
             .min_by(|hit1, hit2| hit1.t.total_cmp(&hit2.t))
     }
-}
 
-impl Hittable for SphereList {
-    fn hit(&self, ray: &Ray, t_range: Range<f32>) -> Option<HitRecord> {
-        self.spheres
-            .iter()
-            .filter_map(|object| object.hit(ray, t_range.clone()))
-            .min_by(|hit1, hit2| hit1.t.total_cmp(&hit2.t))
+    fn bounding_box(&self) -> Aabb {
+        self.bbox
     }
-}
-
-pub trait Hittable {
-    fn hit(&self, ray: &Ray, t_range: Range<f32>) -> Option<HitRecord>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -93,7 +147,7 @@ pub struct Sphere {
 }
 
 impl Hittable for Sphere {
-    fn hit(&self, ray: &Ray, t_range: Range<f32>) -> Option<HitRecord> {
+    fn hit(&self, ray: &Ray, t_range: Interval) -> Option<HitRecord> {
         let oc = self.center - ray.origin();
 
         let a = ray.direction().length_squared();
@@ -108,9 +162,9 @@ impl Hittable for Sphere {
 
         let dsqrt = discriminant.sqrt();
         let mut t = (h - dsqrt) / a;
-        if !t_range.contains(&t) {
+        if !t_range.contains(t) {
             t = (h + dsqrt) / a;
-            if !t_range.contains(&t) {
+            if !t_range.contains(t) {
                 return None;
             }
         }
@@ -130,5 +184,9 @@ impl Hittable for Sphere {
             is_front_face,
             material: self.material,
         })
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        Aabb::from_center(self.center, Vec3::splat(self.radius))
     }
 }
