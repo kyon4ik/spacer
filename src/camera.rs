@@ -140,7 +140,7 @@ impl Camera {
                 s.spawn(move || {
                     let thread_id = std::thread::current().id();
                     let y_offset = sub_image.get_y_offset();
-                    println!(
+                    log::debug!(
                         "thread {:?} runs {}..{}",
                         thread_id,
                         y_offset,
@@ -159,7 +159,7 @@ impl Camera {
                         }
                     }
                     let render_time = timer.elapsed();
-                    println!(
+                    log::debug!(
                         "thread {:?} finished in {}s",
                         thread_id,
                         render_time.as_secs_f64()

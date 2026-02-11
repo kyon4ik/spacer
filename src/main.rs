@@ -11,16 +11,17 @@ use spacer::primitives::{BvhNode, Hittable, HittableList, Ray, Sphere};
 const SKY_COLOR: Color = Color::new(0.5, 0.7, 1.0);
 
 fn main() {
+    init_logger(log::LevelFilter::Debug);
     fastrand::seed(8767162531530871546);
-    println!("Random seed: {}", fastrand::get_seed());
+    log::info!("Random seed: {}", fastrand::get_seed());
 
-    let mut image = Image::from_aspect_ratio(1920, 16.0 / 9.0);
+    let mut image = Image::from_aspect_ratio(600, 16.0 / 9.0);
 
     let camera_params = CameraParams {
         image_width: image.get_width(),
         image_height: image.get_height(),
         fov: f32::to_radians(20.0),
-        samples_per_pixel: 512,
+        samples_per_pixel: 32,
         defocus_angle: f32::to_radians(0.6),
         focus_dist: 10.0,
     };
@@ -30,7 +31,7 @@ fn main() {
 
     let world = final_world();
 
-    println!(
+    log::info!(
         "Image resolution: {}x{}",
         image.get_width(),
         image.get_height()
@@ -39,11 +40,11 @@ fn main() {
     let timer = Instant::now();
     camera.render_to(&mut image, |ray| ray_color(ray, &world, 50));
     let render_time = timer.elapsed();
-    println!("Render in: {:.6}s", render_time.as_secs_f64());
+    log::info!("Render in: {:.6}s", render_time.as_secs_f64());
 
     let image_path = "output/image.ppm";
     image.save_as_ppm(image_path).unwrap();
-    println!("Image saved to {}", image_path);
+    log::info!("Image saved to {}", image_path);
 }
 
 fn ray_color(ray: Ray, world: &impl Hittable, bounces: u8) -> Color {
@@ -125,4 +126,31 @@ fn final_world() -> impl Hittable {
     }));
 
     BvhNode::new(&mut world)
+}
+
+struct SimpleLogger {
+    filter: std::sync::OnceLock<log::LevelFilter>,
+}
+static LOGGER: SimpleLogger = SimpleLogger {
+    filter: std::sync::OnceLock::new(),
+};
+
+impl log::Log for SimpleLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level().to_level_filter() <= *self.filter.get_or_init(|| log::LevelFilter::Off)
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            println!("{} - {}", record.level(), record.args());
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+pub fn init_logger(level: log::LevelFilter) {
+    LOGGER.filter.set(level).unwrap();
+    log::set_logger(&LOGGER).unwrap();
+    log::set_max_level(level);
 }
