@@ -3,10 +3,11 @@ use std::time::Instant;
 
 use spacer::camera::{Camera, CameraParams};
 use spacer::color::Color;
-use spacer::image::Image;
+use spacer::image::{Image, RenderTarget};
 use spacer::material::Material;
 use spacer::math::{Interval, Transform, Vec3, vec3};
 use spacer::primitives::{BvhNode, Hittable, HittableList, Ray, Sphere};
+use spacer::renderer::{MtRenderer, Renderer, StRenderer};
 
 const SKY_COLOR: Color = Color::new(0.5, 0.7, 1.0);
 
@@ -38,7 +39,8 @@ fn main() {
     );
 
     let timer = Instant::now();
-    camera.render_to(&mut image, |ray| ray_color(ray, &world, 50));
+    let renderer = MtRenderer::default();
+    renderer.render(&camera, &mut image, |ray| ray_color(ray, &world, 50));
     let render_time = timer.elapsed();
     log::info!("Render in: {:.6}s", render_time.as_secs_f64());
 

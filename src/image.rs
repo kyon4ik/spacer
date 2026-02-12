@@ -11,6 +11,16 @@ pub struct Image {
     pixels: Vec<u8>,
 }
 
+pub trait RenderTarget {
+    fn get_width(&self) -> u32;
+
+    fn get_height(&self) -> u32;
+
+    fn coordinate(&self, x: u32, y: u32) -> (u32, u32);
+
+    fn put_pixel(&mut self, x: u32, y: u32, color: Color);
+}
+
 impl Image {
     pub fn new(width: u32, height: u32) -> Self {
         let stride = width * 3;
@@ -32,30 +42,8 @@ impl Image {
         self.width as f64 / self.height as f64
     }
 
-    pub fn get_width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn get_height(&self) -> u32 {
-        self.height
-    }
-
     pub fn pixels(&self) -> &[u8] {
         &self.pixels
-    }
-
-    pub fn put_pixel(&mut self, x: u32, y: u32, color: Color) {
-        let gamma = color.linear_to_gamma();
-
-        // Gamma gives the valid range [0.0, 1.0]
-        let r = (255.0 * gamma.r()) as u8;
-        let g = (255.0 * gamma.g()) as u8;
-        let b = (255.0 * gamma.b()) as u8;
-
-        let index = y as usize * self.stride as usize + x as usize * 3;
-        self.pixels[index] = r;
-        self.pixels[index + 1] = g;
-        self.pixels[index + 2] = b;
     }
 
     pub fn split_n(&mut self, n: u32) -> Vec<SubImage<'_>> {
@@ -99,6 +87,35 @@ impl Image {
     }
 }
 
+impl RenderTarget for Image {
+    fn get_width(&self) -> u32 {
+        self.width
+    }
+
+    fn get_height(&self) -> u32 {
+        self.height
+    }
+
+    #[inline]
+    fn put_pixel(&mut self, x: u32, y: u32, color: Color) {
+        let gamma = color.linear_to_gamma();
+
+        // Gamma gives the valid range [0.0, 1.0]
+        let r = (255.0 * gamma.r()) as u8;
+        let g = (255.0 * gamma.g()) as u8;
+        let b = (255.0 * gamma.b()) as u8;
+
+        let index = y as usize * self.stride as usize + x as usize * 3;
+        self.pixels[index] = r;
+        self.pixels[index + 1] = g;
+        self.pixels[index + 2] = b;
+    }
+
+    fn coordinate(&self, x: u32, y: u32) -> (u32, u32) {
+        (x, y)
+    }
+}
+
 pub struct SubImage<'a> {
     width: u32,
     height: u32,
@@ -116,19 +133,21 @@ impl SubImage<'_> {
         self.y_offset
     }
 
-    pub fn get_width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn get_height(&self) -> u32 {
-        self.height
-    }
-
     pub fn pixels(&self) -> &[u8] {
         self.pixels
     }
+}
 
-    pub fn put_pixel(&mut self, x: u32, y: u32, color: Color) {
+impl RenderTarget for SubImage<'_> {
+    fn get_width(&self) -> u32 {
+        self.width
+    }
+
+    fn get_height(&self) -> u32 {
+        self.height
+    }
+
+    fn put_pixel(&mut self, x: u32, y: u32, color: Color) {
         let gamma = color.linear_to_gamma();
 
         // Gamma gives the valid range [0.0, 1.0]
@@ -140,6 +159,10 @@ impl SubImage<'_> {
         self.pixels[index] = r;
         self.pixels[index + 1] = g;
         self.pixels[index + 2] = b;
+    }
+
+    fn coordinate(&self, x: u32, y: u32) -> (u32, u32) {
+        (x, y + self.y_offset)
     }
 }
 

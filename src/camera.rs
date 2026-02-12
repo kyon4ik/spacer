@@ -1,8 +1,7 @@
 use std::f32::consts::FRAC_PI_4;
-use std::time::Instant;
 
 use crate::color::Color;
-use crate::image::Image;
+use crate::image::RenderTarget;
 use crate::math::{Mat3, Transform, Vec2, Vec3};
 use crate::primitives::Ray;
 
@@ -129,44 +128,26 @@ impl Viewport {
 }
 
 impl Camera {
-    pub fn render_to(&self, image: &mut Image, ray_color: impl Fn(Ray) -> Color + Sync) {
+    pub(crate) fn render_to<R, F>(&self, target: &mut R, ray_color: F)
+    where
+        R: RenderTarget,
+        F: Fn(Ray) -> Color,
+    {
         let sample_scale = f32::recip(self.params.samples_per_pixel as f32);
         let rotated_viewport = self.viewport.rotated(self.transform.rotation);
 
-        let avail_cores = std::thread::available_parallelism().map_or(1, |n| n.get());
-        let ray_color_ref = &ray_color;
-        std::thread::scope(|s| {
-            for mut sub_image in image.split_n(avail_cores as u32) {
-                s.spawn(move || {
-                    let thread_id = std::thread::current().id();
-                    let y_offset = sub_image.get_y_offset();
-                    log::debug!(
-                        "thread {:?} runs {}..{}",
-                        thread_id,
-                        y_offset,
-                        y_offset + sub_image.get_height()
-                    );
-                    let timer = Instant::now();
-                    for y in 0..sub_image.get_height() {
-                        for x in 0..sub_image.get_width() {
-                            let mut color = Color::BLACK;
-                            for _ in 0..self.params.samples_per_pixel {
-                                let ray = self.sample_ray(x, y_offset + y, &rotated_viewport);
-                                color += ray_color_ref(ray);
-                            }
-                            color *= sample_scale;
-                            sub_image.put_pixel(x, y, color);
-                        }
-                    }
-                    let render_time = timer.elapsed();
-                    log::debug!(
-                        "thread {:?} finished in {}s",
-                        thread_id,
-                        render_time.as_secs_f64()
-                    );
-                });
+        for y in 0..target.get_height() {
+            for x in 0..target.get_width() {
+                let mut color = Color::BLACK;
+                let (rx, ry) = target.coordinate(x, y);
+                for _ in 0..self.params.samples_per_pixel {
+                    let ray = self.sample_ray(rx, ry, &rotated_viewport);
+                    color += ray_color(ray);
+                }
+                color *= sample_scale;
+                target.put_pixel(x, y, color);
             }
-        });
+        }
     }
 
     #[inline]
