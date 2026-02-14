@@ -171,6 +171,9 @@ impl Hittable for Sphere {
 
         let point = ray.at(t);
         let out_normal = (point - self.center) / self.radius;
+        // This can be slightly of due to floating errors
+        let out_normal = out_normal.fast_renormalized();
+
         let is_front_face = ray.direction().dot(&out_normal) < 0.0;
         let normal = if is_front_face {
             out_normal

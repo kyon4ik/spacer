@@ -62,13 +62,17 @@ impl Camera {
             transform: Transform::default(),
         }
     }
+
+    pub fn aspect_ratio(&self) -> f32 {
+        self.viewport.aspect_ratio
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 struct Viewport {
     // width: f32,
     // height: f32,
-    // aspect_ratio: f32,
+    aspect_ratio: f32,
     pixel00_center: Vec3,
     pixel_delta_u: Vec3,
     pixel_delta_v: Vec3,
@@ -101,7 +105,7 @@ impl Viewport {
         Self {
             // width,
             // height,
-            // aspect_ratio,
+            aspect_ratio,
             pixel_delta_u,
             pixel_delta_v,
             pixel00_center,
@@ -113,6 +117,7 @@ impl Viewport {
     #[inline]
     fn rotated(&self, rotation: Mat3) -> Self {
         Self {
+            aspect_ratio: self.aspect_ratio,
             pixel00_center: rotation * self.pixel00_center,
             pixel_delta_u: rotation * self.pixel_delta_u,
             pixel_delta_v: rotation * self.pixel_delta_v,

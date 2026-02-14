@@ -50,6 +50,12 @@ impl Color {
     }
 }
 
+impl From<Vec3> for Color {
+    fn from(value: Vec3) -> Self {
+        Self(value)
+    }
+}
+
 impl Add for Color {
     type Output = Color;
 

@@ -113,6 +113,12 @@ impl Vec3 {
     }
 
     #[inline]
+    pub fn fast_renormalized(&self) -> Self {
+        let length_squared = self.length_squared();
+        self.mul(0.5 * (3.0 - length_squared))
+    }
+
+    #[inline]
     pub fn is_normalized(&self) -> bool {
         f32::abs(self.length() - 1.0) <= 2e-4
     }
